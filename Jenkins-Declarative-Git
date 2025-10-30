@@ -1,36 +1,42 @@
-currentBuild.displayName = "Tomcat-APP-#"+currentBuild.number
-
-pipeline{
+pipeline {
     agent any
-    
-    environment{
-        PATH = "/opt/maven/bin:$PATH"
-     }
-     stages{
-         stage("Git Checout"){
-              steps{
-                  git credentialsId: 'github-pat', url: 'https://github.com/techawfis/mavenproject.git'
-              }
-          }
-          stage("Maven-Build"){
-              steps{
-                  sh "mvn clean package"
-                  sh "mv target/*.war target/myweb.war"
-              }
-           }
-           stage("deploy-dev"){
-               steps{sshagent(['ec2-key']) {
-                    sh """
-                         scp -o StrictHostKeyChecking=no target/myweb.war ec2-user@10.0.1.35:/opt/tomcat11/webapps/
-                         
-                         ssh ec2-user@10.0.1.35 'sudo /opt/tomcat11/bin/shutdown.sh'
-                         
-                         ssh ec2-user@10.0.1.35 'sudo /opt/tomcat11/bin/startup.sh'
 
+    environment {
+        PATH = "/opt/maven/bin:$PATH"
+    }
+
+    stages {
+        stage("Git Checkout") {
+            steps {
+                git branch: 'main', credentialsId: 'github-pat', url: 'https://github.com/techawfis/mavenproject.git'
+            }
+        }
+
+        stage("Maven-Build") {
+            steps {
+                sh "mvn clean package"
+                sh "mv target/*.war target/myweb.war"
+            }
+        }
+
+        stage("deploy-dev") {
+            steps {
+                sshagent(['ec2-key']) {
+                    sh """
+                        scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null target/myweb.war ec2-user@10.0.1.35:/opt/tomcat11/webapps/
+                        ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ec2-user@10.0.1.35 'sudo /opt/tomcat11/bin/shutdown.sh'
+                        ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ec2-user@10.0.1.35 'sudo /opt/tomcat11/bin/startup.sh'
                     """
-                    }
-               }
-           }
-        
+                }
+            }
         }
     }
+
+    post {
+        always {
+            script {
+                currentBuild.displayName = "Tomcat-APP-#${currentBuild.number}"
+            }
+        }
+    }
+}
